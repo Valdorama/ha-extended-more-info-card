@@ -19,6 +19,34 @@ interface ExtendedMoreInfoCardConfig {
 export class ExtendedMoreInfoCardEditor extends LitElement {
     @property({ attribute: false }) public hass?: HomeAssistant;
     @state() private _config?: ExtendedMoreInfoCardConfig;
+    @state() private _helpersLoaded = false;
+
+    connectedCallback() {
+        super.connectedCallback();
+        this._loadElements();
+    }
+
+    private async _loadElements(): Promise<void> {
+        if (!customElements.get("ha-entity-picker")) {
+            const castWindow = window as any;
+            if (castWindow.loadCardHelpers) {
+                const helpers = await castWindow.loadCardHelpers();
+                if (helpers) {
+                    const card = await helpers.createCardElement({
+                        type: "entities",
+                        entities: [],
+                    });
+                    if (card && card.constructor) {
+                        const getConfigElement = (card.constructor as any).getConfigElement;
+                        if (getConfigElement) {
+                            await getConfigElement();
+                        }
+                    }
+                }
+            }
+        }
+        this._helpersLoaded = true;
+    }
 
     public setConfig(config: ExtendedMoreInfoCardConfig): void {
         this._config = config;
@@ -70,13 +98,17 @@ export class ExtendedMoreInfoCardEditor extends LitElement {
         return html`
       <div class="card-config">
         <div class="side-by-side">
-          <ha-entity-picker
-            .hass=${this.hass}
-            .value=${this._entity}
-            .configValue=${"entity"}
-            @value-changed=${this._valueChanged}
-            allow-custom-entity
-          ></ha-entity-picker>
+          ${this._helpersLoaded
+                ? html`
+                <ha-entity-picker
+                  .hass=${this.hass}
+                  .value=${this._entity}
+                  .configValue=${"entity"}
+                  @value-changed=${this._valueChanged}
+                  allow-custom-entity
+                ></ha-entity-picker>
+              `
+                : html`<p>Loading entity picker...</p>`}
         </div>
 
         <div class="side-by-side">
