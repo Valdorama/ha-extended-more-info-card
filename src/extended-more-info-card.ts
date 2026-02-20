@@ -6,7 +6,16 @@ import {
   type PropertyValues,
 } from "lit";
 import { property, state } from "lit/decorators.js";
-import { mdiClose, mdiHistory, mdiCog, mdiDotsVertical, mdiRayVertex, mdiInformationOutline } from "@mdi/js";
+import {
+  mdiClose,
+  mdiChartBoxOutline,
+  mdiCogOutline,
+  mdiDotsVertical,
+  mdiInformationOutline,
+  mdiFormatListBulletedSquare,
+  mdiTransitConnectionVariant,
+  mdiDevices,
+} from "@mdi/js";
 
 // Include the editor
 import "./extended-more-info-card-editor";
@@ -61,6 +70,7 @@ interface DeviceRegistryEntry {
   name?: string;
   name_by_user?: string;
   area_id?: string;
+  entry_type?: "service" | null;
 }
 
 interface AreaRegistryEntry {
@@ -250,6 +260,59 @@ class ExtendedMoreInfoCard extends LitElement {
     return undefined;
   }
 
+  private _computeShownAttributes(stateObj: HassEntity): string[] {
+    const STATE_ATTRIBUTES = [
+      "entity_id",
+      "assumed_state",
+      "attribution",
+      "custom_ui_more_info",
+      "custom_ui_state_card",
+      "device_class",
+      "editable",
+      "emulated_hue_name",
+      "emulated_hue",
+      "entity_picture",
+      "event_types",
+      "friendly_name",
+      "haaska_hidden",
+      "haaska_name",
+      "icon",
+      "initial_state",
+      "last_reset",
+      "restored",
+      "state_class",
+      "supported_features",
+      "unit_of_measurement",
+      "available_tones",
+    ];
+    const filtersArray = STATE_ATTRIBUTES;
+    return Object.keys(stateObj.attributes).filter(
+      (key) => filtersArray.indexOf(key) === -1
+    );
+  }
+
+  private _hasDisplayableAttributes(): boolean {
+    if (!this.hass || !this._config) return false;
+    const stateObj = this.hass.states[this._config.entity];
+    if (!stateObj) return false;
+    return this._computeShownAttributes(stateObj).length > 0;
+  }
+
+  private _handleMenuAction(ev: CustomEvent) {
+    const action = (ev.detail as any).item?.value;
+    switch (action) {
+      case "device":
+        this._showView("device_info");
+        break;
+      case "related":
+        this._showView("related");
+        break;
+      case "attributes":
+        this._showView("attributes");
+        break;
+    }
+  }
+
   protected render() {
     if (!this._config || !this.hass) return html``;
 
@@ -264,7 +327,10 @@ class ExtendedMoreInfoCard extends LitElement {
     const showHistory = this._config.show_history !== false;
     const showSettings = this._config.show_settings !== false;
     const showRelated = this._config.show_related !== false;
-    const hasDevice = !!this.hass.entities?.[this._config.entity]?.device_id;
+    const entityRegistry = this.hass.entities?.[this._config.entity];
+    const deviceId = entityRegistry?.device_id;
+    const hasDevice = !!deviceId;
+    const deviceType = (deviceId && this.hass.devices?.[deviceId]?.entry_type) || "device";
 
     return html`
       <ha-dialog-header>
@@ -276,60 +342,73 @@ class ExtendedMoreInfoCard extends LitElement {
           @click=${this._close}
         ></ha-icon-button>
 
-        <!-- Title -->
-        <div slot="title" class="title-container">
-            ${subtitle ? html`<div class="subtitle">${subtitle}</div>` : ""}
-            <div class="main-title">${title}</div>
-        </div>
+        <!-- Title and Subtitle -->
+        <span slot="title">${title}</span>
+        ${subtitle ? html`<span slot="subtitle">${subtitle}</span>` : ""}
 
         <!-- Right-side action buttons -->
         ${showHistory
-        ? html`
+          ? html`
               <ha-icon-button
                 slot="actionItems"
-                .path=${mdiHistory}
+                .path=${mdiChartBoxOutline}
                 .label=${"History"}
                 @click=${() => this._showView("history")}
               ></ha-icon-button>
             `
-        : ""}
+          : ""}
         ${showSettings
-        ? html`
+          ? html`
               <ha-icon-button
                 slot="actionItems"
-                .path=${mdiCog}
+                .path=${mdiCogOutline}
                 .label=${"Settings"}
                 @click=${() => this._showView("settings")}
               ></ha-icon-button>
             `
-        : ""}
-        ${showRelated || hasDevice
-        ? html`
-              <ha-button-menu slot="actionItems" corner="BOTTOM_START">
+          : ""}
+        ${showRelated || hasDevice || this._hasDisplayableAttributes()
+          ? html`
+              <ha-dropdown
+                slot="actionItems"
+                @wa-select=${this._handleMenuAction}
+                placement="bottom-end"
+              >
                 <ha-icon-button
                   slot="trigger"
                   .path=${mdiDotsVertical}
                   .label=${"More options"}
                 ></ha-icon-button>
                 ${hasDevice
-            ? html`
-                      <ha-list-item graphic="icon" @click=${() => this._showView("device_info")}>
-                        <ha-svg-icon slot="graphic" .path=${mdiInformationOutline}></ha-svg-icon>
+                  ? html`
+                      <ha-dropdown-item value="device">
+                        <ha-svg-icon
+                          slot="icon"
+                          .path=${deviceType === "service" ? mdiTransitConnectionVariant : mdiDevices}
+                        ></ha-svg-icon>
                         Device info
-                      </ha-list-item>
+                      </ha-dropdown-item>
                     `
-            : ""}
+                  : ""}
                 ${showRelated
-            ? html`
-                      <ha-list-item graphic="icon" @click=${() => this._showView("related")}>
-                        <ha-svg-icon slot="graphic" .path=${mdiRayVertex}></ha-svg-icon>
+                  ? html`
+                      <ha-dropdown-item value="related">
+                        <ha-svg-icon slot="icon" .path=${mdiInformationOutline}></ha-svg-icon>
                         Related
-                      </ha-list-item>
+                      </ha-dropdown-item>
                     `
-            : ""}
-              </ha-button-menu>
+                  : ""}
+                ${this._hasDisplayableAttributes()
+                  ? html`
+                      <ha-dropdown-item value="attributes">
+                        <ha-svg-icon slot="icon" .path=${mdiFormatListBulletedSquare}></ha-svg-icon>
+                        Attributes
+                      </ha-dropdown-item>
+                    `
+                  : ""}
+              </ha-dropdown>
             `
-        : ""}
+          : ""}
       </ha-dialog-header>
 
       <!-- Default entity controls (HA routes by domain automatically) -->
@@ -374,33 +453,6 @@ class ExtendedMoreInfoCard extends LitElement {
         display: flex;
         flex-direction: column;
         gap: 8px;
-      }
-
-      .extended-content {
-        display: block;
-        padding: 8px 24px 24px;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-      }
-
-      .title-container {
-        display: flex;
-        flex-direction: column;
-        line-height: 1.2;
-      }
-
-      .subtitle {
-        font-size: 14px;
-        color: var(--secondary-text-color);
-        font-weight: 400;
-        margin-bottom: 2px;
-      }
-
-      .main-title {
-        font-size: 20px;
-        font-weight: 400;
-        color: var(--primary-text-color);
       }
     `;
   }
