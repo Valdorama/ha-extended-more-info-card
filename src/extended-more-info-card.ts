@@ -6,7 +6,7 @@ import {
   type PropertyValues,
 } from "lit";
 import { property, state } from "lit/decorators.js";
-import { mdiClose, mdiChartTimeline, mdiCog, mdiDotsVertical } from "@mdi/js";
+import { mdiClose, mdiHistory, mdiCog, mdiDotsVertical, mdiRayVertex, mdiInformationOutline } from "@mdi/js";
 
 // Include the editor
 import "./extended-more-info-card-editor";
@@ -264,6 +264,7 @@ class ExtendedMoreInfoCard extends LitElement {
     const showHistory = this._config.show_history !== false;
     const showSettings = this._config.show_settings !== false;
     const showRelated = this._config.show_related !== false;
+    const hasDevice = !!this.hass.entities?.[this._config.entity]?.device_id;
 
     return html`
       <ha-dialog-header>
@@ -286,7 +287,7 @@ class ExtendedMoreInfoCard extends LitElement {
         ? html`
               <ha-icon-button
                 slot="actionItems"
-                .path=${mdiChartTimeline}
+                .path=${mdiHistory}
                 .label=${"History"}
                 @click=${() => this._showView("history")}
               ></ha-icon-button>
@@ -302,7 +303,7 @@ class ExtendedMoreInfoCard extends LitElement {
               ></ha-icon-button>
             `
         : ""}
-        ${showRelated
+        ${showRelated || hasDevice
         ? html`
               <ha-button-menu slot="actionItems" corner="BOTTOM_START">
                 <ha-icon-button
@@ -310,9 +311,22 @@ class ExtendedMoreInfoCard extends LitElement {
                   .path=${mdiDotsVertical}
                   .label=${"More options"}
                 ></ha-icon-button>
-                <mwc-list-item @click=${() => this._showView("related")}>
-                  Related
-                </mwc-list-item>
+                ${hasDevice
+            ? html`
+                      <ha-list-item graphic="icon" @click=${() => this._showView("device_info")}>
+                        <ha-svg-icon slot="graphic" .path=${mdiInformationOutline}></ha-svg-icon>
+                        Device info
+                      </ha-list-item>
+                    `
+            : ""}
+                ${showRelated
+            ? html`
+                      <ha-list-item graphic="icon" @click=${() => this._showView("related")}>
+                        <ha-svg-icon slot="graphic" .path=${mdiRayVertex}></ha-svg-icon>
+                        Related
+                      </ha-list-item>
+                    `
+            : ""}
               </ha-button-menu>
             `
         : ""}
