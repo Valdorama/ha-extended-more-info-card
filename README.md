@@ -3,7 +3,7 @@
 A custom Home Assistant Lovelace card that provides a pixel-perfect replica of the native `ha-dialog-header` (close, history, settings, and kebab menu) along with the entity's default more-info controls, followed by any user-defined extra Lovelace cards.
 
 > **Requires:** [browser_mod](https://github.com/thomasloven/hass-browser_mod) v2+  
-> This card is designed to be used as the popup content inside a browser_mod more-info override. It will display an error if placed directly on a dashboard.
+> This card is designed *exclusively* to be used as the popup content inside a browser_mod more-info dialog override. It relies on the popup dialog context to render correctly and should not be used directly on a Lovelace dashboard.
 
 ---
 
@@ -55,6 +55,8 @@ content:                         # optional — any standard Lovelace card confi
 | `show_settings` | bool | `true` | Show the settings icon button |
 | `show_related` | bool | `true` | Show the kebab menu with "Related" option |
 | `content` | list | `[]` | Standard Lovelace card configs to render below the entity controls |
+
+> **Note on "Related":** In recent versions of Home Assistant, the standard "Related" panel mechanism has changed and triggering it via the kebab menu may silently fail depending on your HA version.
 
 ---
 
@@ -139,6 +141,8 @@ npm install
 npm run build        # outputs dist/extended-more-info-card.js
 npm run watch        # rebuilds on file changes
 ```
+
+> **Note on `dist/`:** The `dist/` directory containing the compiled Javascript is intentionally committed to this repository. This allows users to simply add the repository to HACS and install it without requiring a GitHub Actions build release pipeline. If you make PRs, please ensure you run `npm run build` and include the updated `dist/` files.
 
 ---
 

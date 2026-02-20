@@ -1,5 +1,6 @@
 {
     "name": "Extended More-Info Card",
     "filename": "extended-more-info-card.js",
+    "content_in_root": false,
     "render_readme": true
 }
