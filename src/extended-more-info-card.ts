@@ -23,7 +23,7 @@ import "./extended-more-info-card-editor";
 
 // Console badge
 console.info(
-  `%c EXTENDED-MORE-INFO-CARD %c 0.1.0 `,
+  `%c EXTENDED-MORE-INFO-CARD %c 0.1.1 `,
   "color: white; background: #03a9f4; font-weight: 700;",
   "color: #03a9f4; background: white; font-weight: 700;"
 );
