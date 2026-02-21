@@ -15,6 +15,7 @@ import {
   mdiFormatListBulletedSquare,
   mdiTransitConnectionVariant,
   mdiDevices,
+  mdiArrowLeft,
 } from "@mdi/js";
 
 // Include the editor
@@ -110,6 +111,7 @@ class ExtendedMoreInfoCard extends LitElement {
 
   @state() private _config?: ExtendedMoreInfoCardConfig;
   @state() private _childCards: LovelaceCard[] = [];
+  @state() private _view: "info" | "history" | "settings" | "related" = "info";
 
   // -------------------------------------------------------------------------
   // LitElement lifecycle
@@ -206,36 +208,33 @@ class ExtendedMoreInfoCard extends LitElement {
     );
   }
 
-  private _showView(view: string): void {
-    if (!this._config) return;
-    this.dispatchEvent(
-      new CustomEvent("hass-more-info", {
-        bubbles: true,
-        composed: true,
-        detail: { entityId: this._config.entity, view },
-      })
-    );
+  private _goBack(): void {
+    this._view = "info";
+  }
+
+  private _showView(view: "info" | "history" | "settings" | "related"): void {
+    this._view = view;
   }
 
   // -------------------------------------------------------------------------
   // Rendering
   // -------------------------------------------------------------------------
 
-  private _getSubtitle(): string | undefined {
+  private _getSubtitleData() {
     if (!this.hass || !this._config) return undefined;
 
     const entityId = this._config.entity;
     const entityRegistry = this.hass.entities?.[entityId];
 
     let areaId = entityRegistry?.area_id;
+    let deviceId = entityRegistry?.device_id;
     let deviceName: string | undefined;
     let areaName: string | undefined;
 
-    if (entityRegistry?.device_id) {
-      const device = this.hass.devices?.[entityRegistry.device_id];
+    if (deviceId) {
+      const device = this.hass.devices?.[deviceId];
       if (device) {
         deviceName = device.name_by_user || device.name;
-        // Fallback to device's area if entity doesn't explicitly have one
         if (!areaId) {
           areaId = device.area_id;
         }
@@ -249,15 +248,7 @@ class ExtendedMoreInfoCard extends LitElement {
       }
     }
 
-    if (areaName && deviceName) {
-      return `${areaName} > ${deviceName}`;
-    } else if (deviceName) {
-      return deviceName;
-    } else if (areaName) {
-      return areaName;
-    }
-
-    return undefined;
+    return { areaName, areaId, deviceName, deviceId };
   }
 
   private _computeShownAttributes(stateObj: HassEntity): string[] {
@@ -302,13 +293,24 @@ class ExtendedMoreInfoCard extends LitElement {
     const action = (ev.detail as any).item?.value;
     switch (action) {
       case "device":
-        this._showView("device_info");
+        // For now, staying with native device page navigation as per HA logic
+        // but we could implement internal view if needed.
+        this.dispatchEvent(new CustomEvent("hass-more-info", {
+          bubbles: true,
+          composed: true,
+          detail: { entityId: this._config!.entity, view: "device_info" }
+        }));
         break;
       case "related":
         this._showView("related");
         break;
       case "attributes":
-        this._showView("attributes");
+        // Native HA uses a child view for attributes, we can just switch or handle specifically
+        this.dispatchEvent(new CustomEvent("hass-more-info", {
+          bubbles: true,
+          composed: true,
+          detail: { entityId: this._config!.entity, view: "attributes" }
+        }));
         break;
     }
   }
@@ -322,7 +324,7 @@ class ExtendedMoreInfoCard extends LitElement {
       (stateObj?.attributes?.friendly_name as string | undefined) ??
       this._config.entity;
 
-    const subtitle = this._getSubtitle();
+    const subtitleData = this._getSubtitleData();
 
     const showHistory = this._config.show_history !== false;
     const showSettings = this._config.show_settings !== false;
@@ -333,98 +335,142 @@ class ExtendedMoreInfoCard extends LitElement {
     const deviceType = (deviceId && this.hass.devices?.[deviceId]?.entry_type) || "device";
 
     return html`
-      <ha-dialog-header>
-        <!-- Close button (left / navigationIcon slot) -->
-        <ha-icon-button
-          slot="navigationIcon"
-          .path=${mdiClose}
-          .label=${"Close"}
-          @click=${this._close}
-        ></ha-icon-button>
+      <ha-dialog-header subtitle-position="above">
+        <!-- Navigation icon (Close or Back) -->
+        ${this._view === "info"
+          ? html`
+              <ha-icon-button
+                slot="navigationIcon"
+                .path=${mdiClose}
+                .label=${"Close"}
+                @click=${this._close}
+              ></ha-icon-button>
+            `
+          : html`
+              <ha-icon-button
+                slot="navigationIcon"
+                .path=${mdiArrowLeft}
+                .label=${"Back"}
+                @click=${this._goBack}
+              ></ha-icon-button>
+            `}
 
         <!-- Title and Subtitle -->
         <span slot="title">${title}</span>
-        ${subtitle ? html`<span slot="subtitle">${subtitle}</span>` : ""}
+        ${subtitleData ? html`
+          <div slot="subtitle" class="subtitle">
+            ${subtitleData.areaName ? html`
+              <button class="breadcrumb" @click=${() => this._showView("related")}>${subtitleData.areaName}</button>
+            ` : ""}
+            ${subtitleData.areaName && subtitleData.deviceName ? " > " : ""}
+            ${subtitleData.deviceName ? html`
+              <button class="breadcrumb" @click=${() => this._showView("related")}>${subtitleData.deviceName}</button>
+            ` : ""}
+          </div>
+        ` : ""}
 
         <!-- Right-side action buttons -->
-        ${showHistory
-          ? html`
-              <ha-icon-button
-                slot="actionItems"
-                .path=${mdiChartBoxOutline}
-                .label=${"History"}
-                @click=${() => this._showView("history")}
-              ></ha-icon-button>
-            `
-          : ""}
-        ${showSettings
-          ? html`
-              <ha-icon-button
-                slot="actionItems"
-                .path=${mdiCogOutline}
-                .label=${"Settings"}
-                @click=${() => this._showView("settings")}
-              ></ha-icon-button>
-            `
-          : ""}
-        ${showRelated || hasDevice || this._hasDisplayableAttributes()
-          ? html`
-              <ha-dropdown
-                slot="actionItems"
-                @wa-select=${this._handleMenuAction}
-                placement="bottom-end"
-              >
+        ${this._view === "info" ? html`
+          ${showHistory
+            ? html`
                 <ha-icon-button
-                  slot="trigger"
-                  .path=${mdiDotsVertical}
-                  .label=${"More options"}
+                  slot="actionItems"
+                  .path=${mdiChartBoxOutline}
+                  .label=${"History"}
+                  @click=${() => this._showView("history")}
                 ></ha-icon-button>
-                ${hasDevice
-                  ? html`
-                      <ha-dropdown-item value="device">
-                        <ha-svg-icon
-                          slot="icon"
-                          .path=${deviceType === "service" ? mdiTransitConnectionVariant : mdiDevices}
-                        ></ha-svg-icon>
-                        Device info
-                      </ha-dropdown-item>
-                    `
-                  : ""}
-                ${showRelated
-                  ? html`
-                      <ha-dropdown-item value="related">
-                        <ha-svg-icon slot="icon" .path=${mdiInformationOutline}></ha-svg-icon>
-                        Related
-                      </ha-dropdown-item>
-                    `
-                  : ""}
-                ${this._hasDisplayableAttributes()
-                  ? html`
-                      <ha-dropdown-item value="attributes">
-                        <ha-svg-icon slot="icon" .path=${mdiFormatListBulletedSquare}></ha-svg-icon>
-                        Attributes
-                      </ha-dropdown-item>
-                    `
-                  : ""}
-              </ha-dropdown>
-            `
-          : ""}
+              `
+            : ""}
+          ${showSettings
+            ? html`
+                <ha-icon-button
+                  slot="actionItems"
+                  .path=${mdiCogOutline}
+                  .label=${"Settings"}
+                  @click=${() => this._showView("settings")}
+                ></ha-icon-button>
+              `
+            : ""}
+          ${showRelated || hasDevice || this._hasDisplayableAttributes()
+            ? html`
+                <ha-dropdown
+                  slot="actionItems"
+                  @wa-select=${this._handleMenuAction}
+                  placement="bottom-end"
+                >
+                  <ha-icon-button
+                    slot="trigger"
+                    .path=${mdiDotsVertical}
+                    .label=${"More options"}
+                  ></ha-icon-button>
+                  ${hasDevice
+                    ? html`
+                        <ha-dropdown-item value="device">
+                          <ha-svg-icon
+                            slot="icon"
+                            .path=${deviceType === "service" ? mdiTransitConnectionVariant : mdiDevices}
+                          ></ha-svg-icon>
+                          Device info
+                        </ha-dropdown-item>
+                      `
+                    : ""}
+                  ${showRelated
+                    ? html`
+                        <ha-dropdown-item value="related">
+                          <ha-svg-icon slot="icon" .path=${mdiInformationOutline}></ha-svg-icon>
+                          Related
+                        </ha-dropdown-item>
+                      `
+                    : ""}
+                  ${this._hasDisplayableAttributes()
+                    ? html`
+                        <ha-dropdown-item value="attributes">
+                          <ha-svg-icon slot="icon" .path=${mdiFormatListBulletedSquare}></ha-svg-icon>
+                          Attributes
+                        </ha-dropdown-item>
+                      `
+                    : ""}
+                </ha-dropdown>
+              `
+            : ""}
+        ` : ""}
       </ha-dialog-header>
 
-      <!-- Default entity controls (HA routes by domain automatically) -->
-      <more-info-content
-        .hass=${this.hass}
-        .stateObj=${stateObj}
-      ></more-info-content>
+      <!-- Content switcher -->
+      <div class="content">
+        ${this._view === "info" ? html`
+          <!-- Default entity controls (HA routes by domain automatically) -->
+          <more-info-content
+            .hass=${this.hass}
+            .stateObj=${stateObj}
+          ></more-info-content>
 
-      <!-- User-defined extra cards -->
-      ${this._childCards.length > 0
-        ? html`
-            <div class="extended-content">
-              ${this._childCards}
-            </div>
-          `
-        : ""}
+          <!-- User-defined extra cards -->
+          ${this._childCards.length > 0
+            ? html`
+                <div class="extended-content">
+                  ${this._childCards}
+                </div>
+              `
+            : ""}
+        ` : this._view === "history" ? html`
+          <ha-more-info-history-and-logbook
+            .hass=${this.hass}
+            .entityId=${this._config.entity}
+          ></ha-more-info-history-and-logbook>
+        ` : this._view === "settings" ? html`
+          <ha-more-info-settings
+            .hass=${this.hass}
+            .entityId=${this._config.entity}
+          ></ha-more-info-settings>
+        ` : this._view === "related" ? html`
+          <ha-related-items
+            .hass=${this.hass}
+            .itemId=${this._config.entity}
+            .itemType=${"entity"}
+          ></ha-related-items>
+        ` : ""}
+      </div>
     `;
   }
 
@@ -442,9 +488,20 @@ class ExtendedMoreInfoCard extends LitElement {
         display: block;
       }
 
+      .content {
+        display: block;
+      }
+
       more-info-content {
         display: block;
         padding: 0 24px;
+      }
+
+      ha-more-info-history-and-logbook,
+      ha-more-info-settings,
+      ha-related-items {
+        display: block;
+        padding: 8px 24px 24px;
       }
 
       .extended-content {
@@ -453,6 +510,33 @@ class ExtendedMoreInfoCard extends LitElement {
         display: flex;
         flex-direction: column;
         gap: 8px;
+      }
+
+      .subtitle {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .breadcrumb {
+        color: var(--secondary-text-color);
+        font-size: var(--ha-font-size-m);
+        line-height: 1.2;
+        padding: 2px 4px;
+        margin: -2px -4px;
+        background: none;
+        border: none;
+        outline: none;
+        cursor: pointer;
+        border-radius: 4px;
+        transition: background-color 180ms ease-in-out;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .breadcrumb:hover {
+        background-color: rgba(var(--rgb-secondary-text-color, 114, 114, 114), 0.08);
       }
     `;
   }
