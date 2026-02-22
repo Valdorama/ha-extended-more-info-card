@@ -53,32 +53,84 @@ content:                         # optional — any standard Lovelace card confi
 | `title` | string | entity friendly_name | Override the dialog title |
 | `show_history` | bool | `true` | Show the history icon button |
 | `show_settings` | bool | `true` | Show the settings icon button |
-| `show_related` | bool | `true` | Show the kebab menu with "Related" option |
+| `show_related` | bool | `true` | Show the kebab menu with Related, Device info, and Attributes options |
 | `content` | list | `[]` | Standard Lovelace card configs to render below the entity controls |
-
-> **Note on "Related":** In recent versions of Home Assistant, the standard "Related" panel mechanism has changed and triggering it via the kebab menu may silently fail depending on your HA version.
 
 ---
 
 ## browser_mod setup
 
-Use browser_mod to override the more-info dialog for specific entities. Example for two fans:
+### Primary usage — `popup_cards` (recommended)
+
+browser_mod's `popup_cards` feature intercepts the native more-info tap for specified entities and replaces it with your custom card. This is the primary intended use case for this card.
+
+Add this to your `configuration.yaml`:
 
 ```yaml
-# In your browser_mod config (configuration.yaml or browser_mod UI)
 browser_mod:
-  defaults:
-    more_info_dashboard: false
-  # Use a tap_action on any card to open the popup:
-  #   tap_action:
-  #     action: fire-dom-event
-  #     browser_mod:
-  #       service: browser_mod.more_info
-  #       data:
-  #         entity_id: fan.bedroom_fan
+  popup_cards:
+    fan.bedroom_fan:
+      type: custom:extended-more-info-card
+      entity: fan.bedroom_fan     # must be specified here as well as in popup_cards key
+      content:
+        - type: button
+          name: "5 min"
+          tap_action:
+            action: call-service
+            service: script.fan_run_timer
+            data:
+              fan_entity: fan.bedroom_fan
+              timer_entity: timer.fan_bedroom_timer
+              duration: 300
+        - type: button
+          name: "15 min"
+          tap_action:
+            action: call-service
+            service: script.fan_run_timer
+            data:
+              fan_entity: fan.bedroom_fan
+              timer_entity: timer.fan_bedroom_timer
+              duration: 900
 ```
 
-Or trigger via a card's `tap_action`:
+> **Why is `entity` specified twice?** browser_mod uses the top-level key (`fan.bedroom_fan`) to decide *which* entity tap to intercept, but strips that information before passing the card config to your custom element. The card therefore cannot infer the entity automatically — it must be explicitly provided in the card config as well. This is a known limitation of how browser_mod works, not a bug in this card.
+
+For multiple entities, add a separate entry per entity:
+
+```yaml
+browser_mod:
+  popup_cards:
+    fan.bedroom_fan:
+      type: custom:extended-more-info-card
+      entity: fan.bedroom_fan
+      content:
+        - type: button
+          name: "30 min"
+          tap_action:
+            action: call-service
+            service: script.fan_run_timer
+            data:
+              fan_entity: fan.bedroom_fan
+              timer_entity: timer.fan_bedroom_timer
+              duration: 1800
+    fan.lounge_fan:
+      type: custom:extended-more-info-card
+      entity: fan.lounge_fan
+      content:
+        - type: button
+          name: "30 min"
+          tap_action:
+            action: call-service
+            service: script.fan_run_timer
+            data:
+              fan_entity: fan.lounge_fan
+              timer_entity: timer.fan_lounge_timer
+              duration: 1800
+```
+
+### Secondary usage — `browser_mod.popup` via tap_action
+
+You can also open the card explicitly via a card's `tap_action`:
 
 ```yaml
 type: tile
@@ -93,24 +145,6 @@ tap_action:
         entity: fan.bedroom_fan
         content:
           - type: button
-            name: "5 min"
-            tap_action:
-              action: call-service
-              service: script.fan_run_timer
-              data:
-                fan_entity: fan.bedroom_fan
-                timer_entity: timer.fan_bedroom_timer
-                duration: 300
-          - type: button
-            name: "15 min"
-            tap_action:
-              action: call-service
-              service: script.fan_run_timer
-              data:
-                fan_entity: fan.bedroom_fan
-                timer_entity: timer.fan_bedroom_timer
-                duration: 900
-          - type: button
             name: "30 min"
             tap_action:
               action: call-service
@@ -119,15 +153,6 @@ tap_action:
                 fan_entity: fan.bedroom_fan
                 timer_entity: timer.fan_bedroom_timer
                 duration: 1800
-          - type: button
-            name: "60 min"
-            tap_action:
-              action: call-service
-              service: script.fan_run_timer
-              data:
-                fan_entity: fan.bedroom_fan
-                timer_entity: timer.fan_bedroom_timer
-                duration: 3600
 ```
 
 ---
@@ -142,7 +167,7 @@ npm run build        # outputs dist/extended-more-info-card.js
 npm run watch        # rebuilds on file changes
 ```
 
-> **Note on `dist/`:** The `dist/` directory containing the compiled Javascript is intentionally committed to this repository. This allows users to simply add the repository to HACS and install it without requiring a GitHub Actions build release pipeline. If you make PRs, please ensure you run `npm run build` and include the updated `dist/` files.
+> **Note on `dist/`:** The compiled `dist/extended-more-info-card.js` is intentionally committed to this repository so that HACS can serve it directly without requiring a CI build pipeline. If you submit a PR, please run `npm run build` and include the updated `dist/` file in your commit.
 
 ---
 

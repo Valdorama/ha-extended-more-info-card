@@ -1,6 +1,6 @@
 {
     "name": "extended-more-info-card",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "type": "module",
     "description": "A generic Home Assistant Lovelace card that extends the more-info dialog with configurable extra content",
     "scripts": {
